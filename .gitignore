@@ -189,3 +189,6 @@ logging/*
 **/.terraformrc
 **/terraform.rc
 *.terraform.lock.hcl
+
+google-cloud-sdk/
+google-cloud-cli-*
