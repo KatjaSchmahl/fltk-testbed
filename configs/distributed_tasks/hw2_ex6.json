@@ -1,0 +1,78 @@
+{
+  "trainTasks": [{
+    "type": "distributed",
+    "lambda": 10,
+    "preemptJobs": false,
+    "jobClassParameters": [
+      {
+        "classProbability": 1.0,
+        "priorities": [
+          {
+            "priority": 1,
+            "probability": 1.0
+          }
+        ],
+        "networkConfiguration": {
+          "network": "FashionMNISTCNN",
+          "lossFunction": "MSELoss",
+          "dataset": "mnist"
+        },
+        "systemParameters": {
+          "dataParallelism": 2,
+          "configurations": {
+            "Master": {
+              "cores": "1000m",
+              "memory": "1Gi"
+            },
+            "Worker": {
+              "cores": "750m",
+              "memory": "1Gi"
+            }
+          }
+        },
+        "hyperParameters": {
+          "default": {
+            "totalEpochs": 80,
+            "batchSize": 128,
+            "testBatchSize": 128,
+            "optimizerConfig": {
+              "type": "SGD",
+              "learningRate": 1e3,
+              "momentum": 0.74
+            },
+            "schedulerConfig": {
+              "schedulerStepSize": 520,
+              "schedulerGamma": 0.5,
+              "minimumLearningRate": 3e-10
+            }
+          },
+          "configurations": {
+            "Master": null,
+            "Worker": {
+              "batchSize": 128,
+              "optimizerConfig": {
+                "learningRate": 0.05
+              },
+              "schedulerConfig": {
+                "schedulerStepSize": 2000
+              }
+            }
+          }
+        },
+        "learningParameters": {
+          "rounds": 40,
+          "epochsPerRound": 2,
+          "cuda": false,
+          "clientsPerRound": 1,
+          "dataSampler": {
+            "type": "uniform",
+            "qValue": 0.07,
+            "seed": 42,
+            "shuffle": true
+          },
+          "aggregation": "Sum"
+        }
+      }
+    ]
+  }]
+}

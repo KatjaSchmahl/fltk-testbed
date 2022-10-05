@@ -1,0 +1,34 @@
+{
+   "cluster": {
+      "orchestrator": {
+         "orchestrator_type": "simulated"
+      },
+      "client": {
+         "prefix": "client",
+         "tensorboard_active": false
+      },
+      "image": "gcr.io/fltk-experiment-katja/fltk:latest",
+      "namespace": "hw"
+   },
+   "execution_config": {
+      "duration": 600,
+      "experiment_prefix": "hw_experiment",
+      "cuda": false,
+      "tensorboard": {
+         "active": true,
+         "record_dir": "logging"
+      },
+      "net": {
+         "save_model": true,
+         "save_temp_model": false,
+         "save_epoch_interval": 1,
+         "save_model_path": "models",
+         "epoch_save_start_suffix": "start",
+         "epoch_save_end_suffix": "end"
+      },
+      "reproducibility": {
+         "seeds": [42],
+         "parallel_execution": true
+      }
+   }
+}
