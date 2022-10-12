@@ -205,6 +205,8 @@ class DistLearnerConfig(LearnerConfig):  # pylint: disable=too-many-instance-att
     learning_rate_decay: float
     seed: int
     loss: Loss = Loss.cross_entropy_loss
+    service_time_budget: int = -1
+    model_size: int = -1
 
     @staticmethod
     def from_yaml(path: Path) -> "DistLearnerConfig":

@@ -1,0 +1,102 @@
+{%- set cores = "2000m" -%}
+{%- set memory = "2Gi" -%}
+{%- set train_batch = 128 -%}
+{%- set test_batch = 128 -%}
+{%- set max_epochs = 500 -%}
+{%- set parallel_list = [2, 64]  -%}
+{%- set model_sizes = [0, 2]  -%}
+{%- set learning_rates = [0, 2]  -%}
+{%- set seeds = [42, 360, 812] -%}
+{%- set service_time_budgets = [300, 1800] -%}
+
+
+{
+  "trainTasks": [
+    {%- for parallelism in parallel_list -%}
+    {%- for seed in seeds -%}
+    {%- for model_size in model_sizes -%}
+    {%- for lr in learning_rates -%}
+    {%- for stb in service_time_budgets-%}
+    {
+      "type": "distributed",
+      "lambda": 1.5,
+      "preemptJobs": false,
+      "jobClassParameters": [
+        {
+          "classProbability": 1,
+          "priorities": [
+            {
+              "priority": 1,
+              "probability": 1
+            }
+          ],
+          "networkConfiguration": {
+            "network": "FashionMNISTCNN",
+            "lossFunction": "CrossEntropyLoss",
+            "dataset": "fashion-mnist"
+          },
+          "systemParameters": {
+            "dataParallelism": {{ parallelism }},
+            "configurations": {
+              "default": {
+                "cores": "{{ (cores | safe) }}",
+                "memory": "{{ (memory | safe) }}"
+              },
+              "Master": {
+                "cores": "{{ (cores | safe) }}",
+                "memory": "{{ (memory | safe) }}"
+              },
+              "Worker": {
+                "cores": "{{ (cores | safe) }}",
+                "memory": "{{ (memory | safe) }}"
+              }
+            }
+          },
+          "hyperParameters": {
+            "default": {
+              "totalEpochs": {{ max_epochs }},
+              "serviceTimeBudget": {{ stb }},
+              "modelSize": {{ model_size }},
+              "batchSize": {{ train_batch }},
+              "testBatchSize": {{ test_batch }},
+              "learningRateDecay": 0.0002,
+              "optimizerConfig": {
+                "type": "SGD",
+                "learningRate": {{ lr }},
+                "momentum": 0.1
+              },
+              "schedulerConfig": {
+                "schedulerStepSize": 50,
+                "schedulerGamma": 0.5,
+                "minimumLearningRate": 1e-10
+              }
+            },
+            "configurations": {
+              "Master": null,
+              "Worker": null
+            }
+          },
+          "learningParameters": {
+            "cuda": false,
+            "dataSampler": {
+              "type": "uniform",
+              "qValue": 0.07,
+              "seed": {{ seed }},
+              "shuffle": true
+            }
+          }
+        }
+      ]
+    }
+    {% if not loop.last %},{% endif %}
+    {%- endfor -%}
+    {% if not loop.last %},{% endif %}
+    {%- endfor -%}
+    {% if not loop.last %},{% endif %}
+    {%- endfor -%}
+    {% if not loop.last %},{% endif %}
+    {%- endfor -%}
+    {% if not loop.last %},{% endif %}
+    {%- endfor -%}
+  ]
+}

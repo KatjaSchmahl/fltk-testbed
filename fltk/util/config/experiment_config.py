@@ -53,6 +53,8 @@ class HyperParameterConfiguration:
     test_bs: Optional[int] = field(metadata=config(field_name="testBatchSize"), default_factory=_none_factory)
     lr_decay: Optional[float] = field(metadata=config(field_name="learningRateDecay"), default_factory=_none_factory)
     total_epochs: int = None
+    service_time_budget: int = -1
+    model_size: int = -1
 
     def merge_default(self, other: Dict[str, Any]) -> "HyperParameterConfiguration":
         """Function to merge a HyperParameterConfiguration object with a default configuration.

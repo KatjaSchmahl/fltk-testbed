@@ -92,14 +92,17 @@ def _prepare_experiment_maps(task: ArrivalTask, config: DistributedConfig, u_id:
     """
     type_dict = collections.OrderedDict()
     name_dict = collections.OrderedDict()
+    logging.info(f"{task}")
     for tpe in task.type_map.keys():
         name = str(f'{tpe}-{u_id}-{replication}').lower()
         meta = V1ObjectMeta(name=name,
                             labels={'app.kubernetes.io/name': f"fltk.node.config.{tpe}"})
         exp_path = _generate_experiment_path_name(task, u_id, config)
         filled_template = render_template(task=task, tpe=tpe, replication=replication, experiment_path=exp_path)
+        filled_template += f"\nparallel: {task.system_parameters.data_parallelism}"
         type_dict[tpe] = V1ConfigMap(data={'node.config.yaml': filled_template}, metadata=meta)
         name_dict[tpe] = name
+    logging.info(f"{type_dict}")
     return type_dict, name_dict
 
 
@@ -219,14 +222,21 @@ class Orchestrator(DistNode, abc.ABC):
         experiments interfere with each other.
         """
         if others:
+            self._logger.info(f"other: {others}")
             uuid_regex = re.compile("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 
             ids = {uuid_regex.search(task).group() for task in others if uuid_regex.search(task) is not None}
+
+            self._logger.info(f"ids: {ids}")
             historical_tasks = map(HistoricalArrivalTask, ids)
+            self._logger.info(f"historical tasks: {historical_tasks}")
             self.deployed_tasks.update(historical_tasks)
+            self._logger.info("done with other!")
         while len(self.deployed_tasks) > 0:
+            self._logger.info("len > 0")
             task_to_move = set()
             for task in self.deployed_tasks:
+                self._logger.info(f"Task : {task.id}")
                 try:
                     job_status = self._client.get_job_status(name=f"trainjob-{task.id}",
                                                              namespace='test')
@@ -320,9 +330,13 @@ class BatchOrchestrator(Orchestrator):
         self._alive = True
         try:
             if wait_historical:
+                self._logger.info("wating historical")
                 curr_jobs = self._client.get(namespace="test")
+                self._logger.info("got current jobs")
                 jobs = [job['metadata']['name'] for job in curr_jobs['items']]
+                self._logger.info(f"Jobs: {jobs}")
                 self.wait_for_jobs_to_complete(others=jobs)
+                self._logger.info("done waiting")
             start_time = time.time()
 
             if clear:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 import logging
+import time
 from pathlib import Path
 from typing import List, Tuple, TYPE_CHECKING
 
@@ -15,12 +16,14 @@ from fltk.nets import get_net
 from fltk.nets.util import calculate_class_precision, calculate_class_recall, save_model, load_model_from_file
 from fltk.schedulers import MinCapableStepLR, LearningScheduler
 from fltk.strategy import get_optimizer
+from fltk.util.config.definitions import Nets
 from fltk.util.config.definitions.dataset import get_dist_dataset
 from fltk.util.results import EpochData
 
 if TYPE_CHECKING:
     from fltk.util.config import DistributedConfig, DistLearnerConfig
 
+GROUP23_MODEL=Nets.fashion_mnist_cnn
 
 class DistClient(DistNode):
 
@@ -45,12 +48,21 @@ class DistClient(DistNode):
 
         self.config = config
         self.learning_params = learning_params
+        self._logger.info(f"Learning params: {self.learning_params}")
 
         # Create model and dataset
         self.loss_function = self.learning_params.get_loss_function()()
         self.dataset = get_dist_dataset(self.learning_params.dataset)(self.config, self.learning_params, self._id,
                                                                       self._world_size)
+
+        # logging.info(f"Net: {get_net(self.learning_params.model)}")
         self.model = get_net(self.learning_params.model)()
+        logging.info(f"Model {self.learning_params.model}: {self.model}")
+        if self.learning_params.model == GROUP23_MODEL:
+            logging.info(f"Changing model size {self.learning_params.model}: {self.model}")
+            self.model.change_size(self.learning_params)
+            logging.info(f"Changed model size {self.learning_params.model}: {self.model}")
+
         self.device = self._init_device()
 
         self.optimizer: torch.optim.Optimizer
@@ -208,38 +220,42 @@ class DistClient(DistNode):
         See also the EpochData dataclass.
         @rtype: List[EpochData]
         """
+        stb = self.learning_params.service_time_budget
+        self._logger.info(f"Service time budget is {stb}")
         max_epoch = self.learning_params.max_epoch + 1
         start_time_train = datetime.datetime.now()
         epoch_results = []
         for epoch in range(1, max_epoch):
-            train_loss = self.train(epoch)
+            self._logger.info(f"Epoch {epoch} - elapsed is {(datetime.datetime.now() - start_time_train).total_seconds()}")
+            if (stb == -1) or ((datetime.datetime.now() - start_time_train).total_seconds() < stb):
+                train_loss = self.train(epoch)
 
-            # Let only the 'master node' work on training. Possibly DDP can be used
-            # to have a distributed test loader as well to speed up (would require
-            # aggregation of data).
-            elapsed_time_train = datetime.datetime.now() - start_time_train
-            train_time_ms = int(elapsed_time_train.total_seconds() * 1000)
+                # Let only the 'master node' work on training. Possibly DDP can be used
+                # to have a distributed test loader as well to speed up (would require
+                # aggregation of data).
+                elapsed_time_train = datetime.datetime.now() - start_time_train
+                train_time_ms = int(elapsed_time_train.total_seconds() * 1000)
 
-            start_time_test = datetime.datetime.now()
-            accuracy, test_loss, class_precision, class_recall, confusion_mat = self.test()
+                start_time_test = datetime.datetime.now()
+                accuracy, test_loss, class_precision, class_recall, confusion_mat = self.test()
 
-            elapsed_time_test = datetime.datetime.now() - start_time_test
-            test_time_ms = int(elapsed_time_test.total_seconds() * 1000)
+                elapsed_time_test = datetime.datetime.now() - start_time_test
+                test_time_ms = int(elapsed_time_test.total_seconds() * 1000)
 
-            data = EpochData(epoch_id=epoch,
-                             duration_train=train_time_ms,
-                             duration_test=test_time_ms,
-                             loss_train=train_loss,
-                             accuracy=accuracy,
-                             loss=test_loss,
-                             class_precision=class_precision,
-                             class_recall=class_recall,
-                             confusion_mat=confusion_mat,
-                             num_epochs=max_epoch)
+                data = EpochData(epoch_id=epoch,
+                                 duration_train=train_time_ms,
+                                 duration_test=test_time_ms,
+                                 loss_train=train_loss,
+                                 accuracy=accuracy,
+                                 loss=test_loss,
+                                 class_precision=class_precision,
+                                 class_recall=class_recall,
+                                 confusion_mat=confusion_mat,
+                                 num_epochs=max_epoch)
 
-            epoch_results.append(data)
-            if self._id == 0:
-                self.log_progress(data, epoch)
+                epoch_results.append(data)
+                if self._id == 0:
+                    self.log_progress(data, epoch)
         return epoch_results
 
     def save_model(self, epoch):
@@ -267,4 +283,8 @@ class DistClient(DistNode):
 
             self.tb_writer.add_scalar('accuracy per epoch',
                                       epoch_data.accuracy,
+                                      epoch)
+
+            self.tb_writer.add_scalar('training duration',
+                                      epoch_data.duration_train,
                                       epoch)

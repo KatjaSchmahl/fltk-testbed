@@ -12,5 +12,7 @@ dataset: {{ task.get_net_param('dataset').value }}
 max_epoch: {{ task.get_hyper_param(tpe, 'total_epochs') }}
 learning_rate: {{ task.get_optimizer_param(tpe, 'lr') }}
 learning_rate_decay: {{ task.get_hyper_param(tpe, 'lr_decay') }}
+service_time_budget: {{ task.get_hyper_param(tpe, 'service_time_budget') }}
+model_size: {{ task.get_hyper_param(tpe, 'model_size') }}
 seed: {{ task.get_net_param('seed') }}
 loss: {{ task.get_net_param('loss_function').value }}
