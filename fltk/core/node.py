@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 # Global dictionary to enable peer to peer communication between clients
 global_vars = {}
-
+GROUP23_MODELNAME="MNISTLenet5"
 
 class Node(abc.ABC):
     """
@@ -56,6 +56,8 @@ class Node(abc.ABC):
         self.device = self.init_device()
         self.distributed = config.distributed
         self.net = get_net(self.config.net_name)()
+        if self.config.net_name == GROUP23_MODELNAME:
+            self.net.change_size(config)
         self.net.to(self.device)
 
     def init_dataloader(self, world_size: int = None):

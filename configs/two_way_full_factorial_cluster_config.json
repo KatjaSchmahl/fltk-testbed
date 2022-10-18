@@ -12,7 +12,7 @@
    },
    "execution_config": {
       "duration": 18000,
-      "experiment_prefix": "two_way_ff",
+      "experiment_prefix": "two_way_ff_180_1800_not_parallel",
       "cuda": false,
       "tensorboard": {
          "active": true,

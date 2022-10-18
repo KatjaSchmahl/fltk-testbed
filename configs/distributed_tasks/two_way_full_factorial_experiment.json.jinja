@@ -1,13 +1,13 @@
 {%- set cores = "2000m" -%}
 {%- set memory = "2Gi" -%}
-{%- set train_batch = 128 -%}
-{%- set test_batch = 128 -%}
+{%- set train_batch = 100 -%}
+{%- set test_batch = 100 -%}
 {%- set max_epochs = 500 -%}
-{%- set parallel_list = [2, 64]  -%}
+{%- set parallel_list = [2]  -%}
 {%- set model_sizes = [0, 2]  -%}
-{%- set learning_rates = [0, 2]  -%}
-{%- set seeds = [42, 360, 812] -%}
-{%- set service_time_budgets = [300, 1800] -%}
+{%- set learning_rates = [0.0005, 0.003]  -%}
+{%- set seeds = [86, 153, 725] -%}
+{%- set service_time_budgets = [180, 1800] -%}
 
 
 {
@@ -19,7 +19,7 @@
     {%- for stb in service_time_budgets-%}
     {
       "type": "distributed",
-      "lambda": 1.5,
+      "lambda": 1200,
       "preemptJobs": false,
       "jobClassParameters": [
         {
@@ -61,9 +61,8 @@
               "testBatchSize": {{ test_batch }},
               "learningRateDecay": 0.0002,
               "optimizerConfig": {
-                "type": "SGD",
-                "learningRate": {{ lr }},
-                "momentum": 0.1
+                "type": "Adam",
+                "learningRate": {{ lr }}
               },
               "schedulerConfig": {
                 "schedulerStepSize": 50,
