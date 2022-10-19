@@ -92,7 +92,7 @@ def _prepare_experiment_maps(task: ArrivalTask, config: DistributedConfig, u_id:
     """
     type_dict = collections.OrderedDict()
     name_dict = collections.OrderedDict()
-    logging.info(f"{task}")
+    # logging.info(f"{task}")
     for tpe in task.type_map.keys():
         name = str(f'{tpe}-{u_id}-{replication}').lower()
         meta = V1ObjectMeta(name=name,
@@ -102,7 +102,7 @@ def _prepare_experiment_maps(task: ArrivalTask, config: DistributedConfig, u_id:
         filled_template += f"\nparallel: {task.system_parameters.data_parallelism}"
         type_dict[tpe] = V1ConfigMap(data={'node.config.yaml': filled_template}, metadata=meta)
         name_dict[tpe] = name
-    logging.info(f"{type_dict}")
+    # logging.info(f"{type_dict}")
     return type_dict, name_dict
 
 
@@ -215,43 +215,71 @@ class Orchestrator(DistNode, abc.ABC):
             self._v1.create_namespaced_config_map(self._config.cluster_config.namespace,
                                                   config_map)
 
-    def wait_for_jobs_to_complete(self, others: Optional[List[str]] = None):
+    def wait_for_jobs_to_complete(self, others: Optional[List[str]] = None, use_available_workers: bool = False):
         """
         Function to wait for all tasks to complete. This allows to wait for all the resources to free-up after running
         an experiment. Thereby allowing for running multiple experiments on a single cluster, without letting
         experiments interfere with each other.
         """
-        if others:
-            self._logger.info(f"other: {others}")
-            uuid_regex = re.compile("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+        if not use_available_workers:
+            if others:
+                self._logger.info(f"other: {others}")
+                uuid_regex = re.compile("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 
-            ids = {uuid_regex.search(task).group() for task in others if uuid_regex.search(task) is not None}
+                ids = {uuid_regex.search(task).group() for task in others if uuid_regex.search(task) is not None}
 
-            self._logger.info(f"ids: {ids}")
-            historical_tasks = map(HistoricalArrivalTask, ids)
-            self._logger.info(f"historical tasks: {historical_tasks}")
-            self.deployed_tasks.update(historical_tasks)
-            self._logger.info("done with other!")
-        while len(self.deployed_tasks) > 0:
-            self._logger.info("len > 0")
-            task_to_move = set()
-            for task in self.deployed_tasks:
-                self._logger.info(f"Task : {task.id}")
-                try:
-                    job_status = self._client.get_job_status(name=f"trainjob-{task.id}",
-                                                             namespace='test')
-                except Exception as e:
-                    logging.debug(msg=f"Could not retrieve job_status for {task.id}")
-                    job_status = None
+                self._logger.info(f"ids: {ids}")
+                historical_tasks = map(HistoricalArrivalTask, ids)
+                self._logger.info(f"historical tasks: {historical_tasks}")
+                self.deployed_tasks.update(historical_tasks)
+                self._logger.info("done with other!")
+            while len(self.deployed_tasks) > 0:
+                self._logger.info(f"len > 0 {len(self.deployed_tasks)}")
+                task_to_move = set()
+                for task in self.deployed_tasks:
+                    self._logger.info(f"Task : {task.id}")
+                    try:
+                        job_status = self._client.get_job_status(name=f"trainjob-{task.id}",
+                                                                 namespace='test')
+                    except Exception as e:
+                        logging.debug(msg=f"Could not retrieve job_status for {task.id}")
+                        job_status = None
 
-                if job_status and job_status in {'Completed', 'Failed', 'Succeeded'}:
-                    logging.info(f"{task.id} was completed with status: {job_status}, moving to completed")
-                    task_to_move.add(task)
-                else:
-                    logging.info(f"Waiting for {task.id} to complete, {self.pending_tasks.qsize()} pending, {self._arrival_generator.arrivals.qsize()} arrivals")
-            self.completed_tasks.update(task_to_move)
-            self.deployed_tasks.difference_update(task_to_move)
-            time.sleep(self.SLEEP_TIME)
+                    if job_status and job_status in {'Completed', 'Failed', 'Succeeded'}:
+                        logging.info(f"{task.id} was completed with status: {job_status}, moving to completed")
+                        task_to_move.add(task)
+                    else:
+                        logging.info(f"Waiting for {task.id} to complete, {self.pending_tasks.qsize()} pending, {self._arrival_generator.arrivals.qsize()} arrivals")
+                self.completed_tasks.update(task_to_move)
+                self.deployed_tasks.difference_update(task_to_move)
+                time.sleep(self.SLEEP_TIME)
+        else:
+            logging.info("Using available workers!")
+            while self.workers_in_use >= self.available_workers:
+                task_to_move = set()
+                logging.info(f"Deployed: {[t.id for t in self.deployed_tasks]}")
+                for task in self.deployed_tasks:
+                    self._logger.info(f"Task : {task.id}")
+                    try:
+                        job_status = self._client.get_job_status(name=f"trainjob-{task.id}",
+                                                                 namespace='test')
+                    except Exception as e:
+                        logging.debug(msg=f"Could not retrieve job_status for {task.id}")
+                        job_status = None
+
+                    if job_status and job_status in {'Completed', 'Failed', 'Succeeded'}:
+                        logging.info(f"{task.id} was completed with status: {job_status}, moving to completed")
+                        task_to_move.add(task)
+                    else:
+                        logging.info(
+                            f"Waiting for {task.id} to complete, {self.pending_tasks.qsize()} pending, {self._arrival_generator.arrivals.qsize()} arrivals")
+                self.completed_tasks.update(task_to_move)
+                self.deployed_tasks.difference_update(task_to_move)
+                logging.info(f"Deployed: {[t.id for t in self.deployed_tasks]}")
+                for task in task_to_move:
+                    logging.info(f"Freeing workers of {task.system_parameters}")
+                    self.workers_in_use -= task.system_parameters.data_parallelism
+                time.sleep(self.SLEEP_TIME)
 
 
 class SimulatedOrchestrator(Orchestrator):
@@ -312,6 +340,9 @@ class BatchOrchestrator(Orchestrator):
 
     def __init__(self, cluster_mgr: ClusterManager, arrival_generator: ArrivalGenerator, config: DistributedConfig):
         super().__init__(cluster_mgr, arrival_generator, config)
+        self.workers_in_use = 0
+        logging.info(f"available workers: {self._config.cluster_config.orchestrator.available_workers}")
+        self.available_workers = self._config.cluster_config.orchestrator.available_workers
 
     def run(self, clear: bool = False,
             experiment_replication: int = 1,
@@ -373,13 +404,19 @@ class BatchOrchestrator(Orchestrator):
             self._create_config_maps(config_dict)
 
             job_to_start = construct_job(self._config, curr_task, configmap_name_dict)
-            self._logger.info(f"Deploying on cluster: {curr_task.id}")
+            self._logger.info(f"Deploying on cluster: {curr_task.id}, {curr_task.system_parameters}")
             self._client.create(job_to_start, namespace=self._config.cluster_config.namespace)
             self.deployed_tasks.add(curr_task)
+            logging.info(f"Deployed: {[t.id for t in self.deployed_tasks]}")
+            self.workers_in_use += curr_task.system_parameters.data_parallelism
+            logging.info(f"Workers in use increased to {self.workers_in_use}")
+            logging.info(f"Available workers {self.available_workers}")
             # Either wait to complete, or continue. Note that the orchestrator currently does not support scaling
             # experiments up or down.
-            if not self._config.cluster_config.orchestrator.parallel_execution:
-                self.wait_for_jobs_to_complete()
+            logging.info(f"parallel execution: {self._config.cluster_config.orchestrator.parallel_execution}")
+            if (not self._config.cluster_config.orchestrator.parallel_execution) and (self.workers_in_use >= self._config.cluster_config.orchestrator.available_workers):
+                logging.info(f"Waiting for jobs to complete, {self.workers_in_use} >= {self._config.cluster_config.orchestrator.available_workers}")
+                self.wait_for_jobs_to_complete(use_available_workers=True)
         if self._config.cluster_config.orchestrator.parallel_execution:
             self.wait_for_jobs_to_complete()
         logging.info('Experiment completed.')

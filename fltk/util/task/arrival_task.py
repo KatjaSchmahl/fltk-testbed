@@ -23,7 +23,7 @@ class _ArrivalTask(abc.ABC):
     """
     Private parent of ArrivalTasks, used internally for allowing to track
     """
-    id: UUID = field(compare=False)  # pylint: disable=invalid-name
+    id: UUID  # pylint: disable=invalid-name
 
 @dataclass(frozen=True)
 class HistoricalArrivalTask(abc.ABC):
