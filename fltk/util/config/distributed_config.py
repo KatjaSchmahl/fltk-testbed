@@ -84,6 +84,7 @@ class OrchestratorConfig:
     """ """
     orchestrator_type: OrchestratorType
     parallel_execution: bool = True
+    use_available_workers: bool = False
     available_workers: int = 16
 
 

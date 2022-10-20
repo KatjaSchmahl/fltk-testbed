@@ -6,7 +6,6 @@ import logging
 import re
 import time
 import uuid
-from queue import PriorityQueue
 from typing import OrderedDict, Dict, Type, Set, Union, Optional, List
 from typing import TYPE_CHECKING
 
@@ -17,6 +16,7 @@ from kubernetes import client
 from kubernetes.client import V1ConfigMap, V1ObjectMeta
 
 from fltk.core.distributed.dist_node import DistNode
+from fltk.core.distributed.peekable_priority_queue import PeekablePriorityQueue
 from fltk.util.cluster.client import construct_job, ClusterManager
 from fltk.util.task import get_job_arrival_class, DistributedArrivalTask, FederatedArrivalTask, ArrivalTask
 from fltk.util.task.arrival_task import HistoricalArrivalTask, _ArrivalTask
@@ -140,7 +140,7 @@ class Orchestrator(DistNode, abc.ABC):
     """
     _alive = False
     # Priority queue, requires an orderable object, otherwise a Tuple[int, Any] can be used to insert.
-    pending_tasks: "PriorityQueue[ArrivalTask]" = PriorityQueue()
+    pending_tasks: "PeekablePriorityQueue[ArrivalTask]" = PeekablePriorityQueue()
     deployed_tasks: Set[_ArrivalTask] = set()
     completed_tasks: Set[_ArrivalTask] = set()
     SLEEP_TIME = 5
@@ -234,7 +234,6 @@ class Orchestrator(DistNode, abc.ABC):
                 self.deployed_tasks.update(historical_tasks)
                 self._logger.info("done with other!")
             while len(self.deployed_tasks) > 0:
-                self._logger.info(f"len > 0 {len(self.deployed_tasks)}")
                 task_to_move = set()
                 for task in self.deployed_tasks:
                     self._logger.info(f"Task : {task.id}")
@@ -255,11 +254,10 @@ class Orchestrator(DistNode, abc.ABC):
                 time.sleep(self.SLEEP_TIME)
         else:
             logging.info("Using available workers!")
-            while self.workers_in_use >= self.available_workers:
+            while self.workers_in_use + self.pending_tasks.peek().system_parameters.data_parallelism > self.available_workers:
                 task_to_move = set()
                 logging.info(f"Deployed: {[t.id for t in self.deployed_tasks]}")
                 for task in self.deployed_tasks:
-                    self._logger.info(f"Task : {task.id}")
                     try:
                         job_status = self._client.get_job_status(name=f"trainjob-{task.id}",
                                                                  namespace='test')
@@ -275,7 +273,6 @@ class Orchestrator(DistNode, abc.ABC):
                             f"Waiting for {task.id} to complete, {self.pending_tasks.qsize()} pending, {self._arrival_generator.arrivals.qsize()} arrivals")
                 self.completed_tasks.update(task_to_move)
                 self.deployed_tasks.difference_update(task_to_move)
-                logging.info(f"Deployed: {[t.id for t in self.deployed_tasks]}")
                 for task in task_to_move:
                     logging.info(f"Freeing workers of {task.system_parameters}")
                     self.workers_in_use -= task.system_parameters.data_parallelism
@@ -341,8 +338,10 @@ class BatchOrchestrator(Orchestrator):
     def __init__(self, cluster_mgr: ClusterManager, arrival_generator: ArrivalGenerator, config: DistributedConfig):
         super().__init__(cluster_mgr, arrival_generator, config)
         self.workers_in_use = 0
-        logging.info(f"available workers: {self._config.cluster_config.orchestrator.available_workers}")
         self.available_workers = self._config.cluster_config.orchestrator.available_workers
+        self.use_available_workers = self._config.cluster_config.orchestrator.use_available_workers
+        if self.use_available_workers:
+            self._logger.info(f"Using available workers: {self._config.cluster_config.orchestrator.available_workers}")
 
     def run(self, clear: bool = False,
             experiment_replication: int = 1,
@@ -414,9 +413,14 @@ class BatchOrchestrator(Orchestrator):
             # Either wait to complete, or continue. Note that the orchestrator currently does not support scaling
             # experiments up or down.
             logging.info(f"parallel execution: {self._config.cluster_config.orchestrator.parallel_execution}")
-            if (not self._config.cluster_config.orchestrator.parallel_execution) and (self.workers_in_use >= self._config.cluster_config.orchestrator.available_workers):
-                logging.info(f"Waiting for jobs to complete, {self.workers_in_use} >= {self._config.cluster_config.orchestrator.available_workers}")
-                self.wait_for_jobs_to_complete(use_available_workers=True)
+            if not self._config.cluster_config.orchestrator.parallel_execution:
+                logging.info(f"Waiting for jobs to complete, {self.workers_in_use}>= {self._config.cluster_config.orchestrator.available_workers}")
+                if self.use_available_workers:
+                    logging.info(f"Peeking {self.pending_tasks.peek().system_parameters.data_parallelism}")
+                    if self.workers_in_use + self.pending_tasks.peek().system_parameters.data_parallelism > self.available_workers:
+                        self.wait_for_jobs_to_complete(use_available_workers=True)
+                else:
+                    self.wait_for_jobs_to_complete(use_available_workers=False)
         if self._config.cluster_config.orchestrator.parallel_execution:
             self.wait_for_jobs_to_complete()
         logging.info('Experiment completed.')
