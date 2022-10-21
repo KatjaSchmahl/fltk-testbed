@@ -18,12 +18,13 @@ from fltk.util.task.generator.arrival_generator import Arrival
 MASTER_REPLICATION: int = 1  # Static master replication value, dictated by PytorchTrainingJobs
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, order=True)
 class _ArrivalTask(abc.ABC):
     """
     Private parent of ArrivalTasks, used internally for allowing to track
     """
-    id: UUID  # pylint: disable=invalid-name
+    priority: Optional[int] = field(compare=True)
+    id: UUID = field(compare=True) # pylint: disable=invalid-name
 
 @dataclass(frozen=True)
 class HistoricalArrivalTask(abc.ABC):
@@ -48,7 +49,6 @@ class ArrivalTask(_ArrivalTask):
     system_parameters: SystemParameters = field(compare=False)
     hyper_parameters: HyperParameters = field(compare=False)
     learning_parameters: LearningParameters = field(compare=False)
-    priority: Optional[int] = None
 
     @staticmethod
     @abc.abstractmethod
@@ -191,7 +191,7 @@ class ArrivalTask(_ArrivalTask):
         return getattr(self, parameter)
 
 
-@dataclass(order=True, frozen=True)
+@dataclass(frozen=True)
 class DistributedArrivalTask(ArrivalTask):
     """
     Object to contain configuration of training task. It describes the following properties;
@@ -239,7 +239,7 @@ class DistributedArrivalTask(ArrivalTask):
         return task
 
 
-@dataclass(order=True, frozen=True)
+@dataclass(frozen=True)
 class FederatedArrivalTask(ArrivalTask):
     """
     Task describing configuration objects for running FederatedLearning experiments on K8s.

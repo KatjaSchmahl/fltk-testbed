@@ -301,6 +301,7 @@ class SimulatedOrchestrator(Orchestrator):
                 task = _generate_task(arrival)
                 self._logger.debug(f"Arrival of: {task}")
                 self.pending_tasks.put(task)
+                time.sleep(self.SLEEP_TIME)
 
             # Deploy all pending tasks without logic
             while not self.pending_tasks.empty():
@@ -388,8 +389,14 @@ class BatchOrchestrator(Orchestrator):
             task = _generate_task(arrival)
             self._logger.debug(f"Arrival of: {task}")
             self.pending_tasks.put(task)
+
         # 2. Schedule all tasks that arrived previously
         while not self.pending_tasks.empty():
+            while not self._arrival_generator.arrivals.empty():
+                arrival = self._arrival_generator.arrivals.get()
+                task = _generate_task(arrival)
+                self._logger.debug(f"Arrival of: {task}")
+                self.pending_tasks.put(task)
             # Do blocking request to priority queue
             curr_task: ArrivalTask = self.pending_tasks.get()
             self._logger.info(f"Scheduling arrival of Arrival: {curr_task.id}")
@@ -423,6 +430,10 @@ class BatchOrchestrator(Orchestrator):
                     self.wait_for_jobs_to_complete(use_available_workers=False)
         if self._config.cluster_config.orchestrator.parallel_execution:
             self.wait_for_jobs_to_complete()
+
+        if self.use_available_workers:
+            self.wait_for_jobs_to_complete()
+
         logging.info('Experiment completed.')
         # Stop experiment
         self.stop()

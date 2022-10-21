@@ -262,6 +262,7 @@ class SequentialArrivalGenerator(ArrivalGenerator):
         @return: None
         @rtype: None
         """
+        logging.info(f"Running arv generator")
         self.start_time = time.time()
         description: JobDescription
         if not seed:
@@ -271,9 +272,10 @@ class SequentialArrivalGenerator(ArrivalGenerator):
         for job_name, description in self.job_dict.items():
             for repl, job_class_param in enumerate(description.job_class_parameters):
                 replication_name = f"{job_name}_{repl}_{seed}"
+                logging.info(f"Priority: {job_class_param.priorities[0]}")
                 train_task = TrainTask(identity=replication_name,
                                        job_parameters=job_class_param,
-                                       priority=None,
+                                       priority=job_class_param.priorities[0],
                                        replication=repl,
                                        experiment_type=description.experiment_type,
                                        seed=seed)

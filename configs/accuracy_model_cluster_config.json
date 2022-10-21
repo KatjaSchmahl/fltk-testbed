@@ -1,0 +1,36 @@
+{
+   "cluster": {
+      "orchestrator": {
+         "orchestrator_type": "batch",
+         "parallel_execution": false,
+         "use_available_workers": true,
+         "available_workers": 24
+      },
+      "client": {
+         "prefix": "client",
+         "tensorboard_active": false
+      },
+      "image": "gcr.io/fltk-experiment-katja-2/fltk:latest",
+      "namespace": "test"
+   },
+   "execution_config": {
+      "duration": 1800000,
+      "experiment_prefix": "accuracy_model_experiment_priority",
+      "cuda": false,
+      "tensorboard": {
+         "active": true,
+         "record_dir": "logging"
+      },
+      "net": {
+         "save_model": false,
+         "save_temp_model": false,
+         "save_epoch_interval": 1,
+         "save_model_path": "models",
+         "epoch_save_start_suffix": "start",
+         "epoch_save_end_suffix": "end"
+      },
+      "reproducibility": {
+         "seeds": [23]
+      }
+   }
+}
