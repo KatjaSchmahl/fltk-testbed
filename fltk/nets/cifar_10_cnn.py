@@ -49,3 +49,36 @@ class Cifar10CNN(torch.nn.Module):
         x = self.softmax(self.fc2(x))
 
         return x
+
+
+    def change_size(self, learning_params):
+        if learning_params.model_size == 0:
+            scale = 0.5
+        elif learning_params.model_size == 1:
+            scale = 1
+        elif learning_params.model_size == 2:
+            scale = 2
+
+        self.conv1 = torch.nn.Conv2d(3, 32*scale, kernel_size=3, padding=1)
+        self.bn1 = torch.nn.BatchNorm2d(32*scale)
+        self.conv2 = torch.nn.Conv2d(32*scale, 32*scale, kernel_size=3, padding=1)
+        self.bn2 = torch.nn.BatchNorm2d(32*scale)
+        self.pool1 = torch.nn.MaxPool2d(kernel_size=2)
+
+        self.conv3 = torch.nn.Conv2d(32*scale, 64*scale, kernel_size=3, padding=1)
+        self.bn3 = torch.nn.BatchNorm2d(64*scale)
+        self.conv4 = torch.nn.Conv2d(64*scale, 64*scale, kernel_size=3, padding=1)
+        self.bn4 = torch.nn.BatchNorm2d(64*scale)
+        self.pool2 = torch.nn.MaxPool2d(kernel_size=2)
+
+        self.conv5 = torch.nn.Conv2d(64*scale, 128*scale, kernel_size=3, padding=1)
+        self.bn5 = torch.nn.BatchNorm2d(128*scale)
+        self.conv6 = torch.nn.Conv2d(128*scale, 128*scale, kernel_size=3, padding=1)
+        self.bn6 = torch.nn.BatchNorm2d(128*scale)
+        self.pool3 = torch.nn.MaxPool2d(kernel_size=2)
+
+        self.fc1 = torch.nn.Linear(128 * 4 * 4 *scale, 128*scale)
+
+        self.softmax = torch.nn.Softmax()
+        self.fc2 = torch.nn.Linear(128*scale, 10)
+

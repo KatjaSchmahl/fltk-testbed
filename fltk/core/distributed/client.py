@@ -58,7 +58,7 @@ class DistClient(DistNode):
         # logging.info(f"Net: {get_net(self.learning_params.model)}")
         self.model = get_net(self.learning_params.model)()
         logging.info(f"Model {self.learning_params.model}: {self.model}")
-        if self.learning_params.model == GROUP23_MODEL:
+        if self.learning_params.model == GROUP23_MODEL or self.learning_params.model == Nets.cifar10_cnn:
             logging.info(f"Changing model size {self.learning_params.model}: {self.model}")
             self.model.change_size(self.learning_params)
             logging.info(f"Changed model size {self.learning_params.model}: {self.model}")
