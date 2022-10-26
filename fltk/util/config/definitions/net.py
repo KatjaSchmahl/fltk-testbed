@@ -10,6 +10,7 @@ class Nets(Enum):
     cifar10_resnet = 'Cifar10ResNet'
     fashion_mnist_cnn = 'FashionMNISTCNN'
     fashion_mnist_resnet = 'FashionMNISTResNet'
+    fashion_mnist_lin = 'FashionMNISTLIN'
     mnist_cnn = 'MNISTCNN'
 
     @classmethod
